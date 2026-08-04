@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -eu
+
+conf="${XDG_CONFIG_HOME:-$HOME/.config}/vkSumi/vkSumi.conf"
+
+if [[ ! -f "$conf" ]]; then
+    mkdir -p "$(dirname "$conf")"
+    printf 'enabled = true\n' > "$conf"
+    echo "vksumi-toggle: created $conf"
+fi
+
+current="$(grep -E '^[[:space:]]*enabled[[:space:]]*=' "$conf" | tail -n1 | sed -E 's/^[^=]*=[[:space:]]*([^[:space:]#]+).*/\1/' || true)"
+case "${current,,}" in
+    1|true|yes|on)  next="false" ;;
+    *)              next="true"  ;;
+esac
+
+if grep -qE '^[[:space:]]*enabled[[:space:]]*=' "$conf"; then
+    sed -i -E "s/^([[:space:]]*enabled[[:space:]]*=[[:space:]]*).*/\1$next/" "$conf"
+else
+    printf 'enabled = %s\n' "$next" >> "$conf"
+fi
+
+echo "vksumi: enabled = $next"

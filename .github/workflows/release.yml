@@ -1,0 +1,144 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write   # needed to create/update the GitHub Release
+
+jobs:
+  arch:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: install deps
+        run: |
+          pacman -Syu --noconfirm --needed \
+            base-devel meson ninja glslang vulkan-headers vulkan-icd-loader libx11 git sudo
+
+      - uses: actions/checkout@v4
+
+      - name: build .pkg.tar.zst
+        run: |
+          # makepkg refuses to run as root, set up a builder user
+          useradd -m builder
+          chown -R builder:builder .
+          cp packaging/PKGBUILD .
+          # patch version from tag + build from local checkout instead of the
+          # github release tarball. `cd "$startdir"` sends build()/package() back
+          # to the repo root (makepkg cd's us into $srcdir = ./src by default,
+          # which is our own src/ dir, confusing meson)
+          ver="${GITHUB_REF_NAME#v}"
+          [ -z "$ver" ] && ver="0.0.0"
+          sed -i "s/^pkgver=.*/pkgver=$ver/" PKGBUILD
+          sed -i 's|source=(.*)|source=()|' PKGBUILD
+          sed -i 's|sha256sums=(.*)|sha256sums=()|' PKGBUILD
+          sed -i 's|cd vkSumi-\$pkgver|cd "$startdir"|' PKGBUILD
+          sudo -u builder makepkg --noconfirm
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: '*.pkg.tar.zst'
+
+  debian:
+    runs-on: ubuntu-latest
+    container: debian:stable
+    steps:
+      - name: install deps
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            meson ninja-build glslang-tools libvulkan-dev libx11-dev pkg-config \
+            gcc g++ dpkg-dev ca-certificates git
+
+      - uses: actions/checkout@v4
+
+      - name: build + package .deb
+        run: |
+          ver="${GITHUB_REF_NAME#v}"
+          [ -z "$ver" ] && ver="0.0.0"
+          meson setup build --prefix=/usr --buildtype=release
+          ninja -C build
+          DESTDIR="$PWD/pkgroot" meson install -C build
+          mkdir -p pkgroot/DEBIAN
+          cat > pkgroot/DEBIAN/control <<EOF
+          Package: vksumi
+          Version: $ver
+          Section: graphics
+          Priority: optional
+          Architecture: amd64
+          Maintainer: vkSumi <noreply@github.com>
+          Depends: libvulkan1, libx11-6, libc6, libstdc++6, libgcc-s1
+          Description: Vulkan layer for runtime color grading on Linux
+           Adrenalin/Freestyle equivalent for Linux gaming.
+           Brightness, contrast, saturation, hue, gamma, etc, with hot-reload.
+          EOF
+          dpkg-deb --build pkgroot "vksumi_${ver}_amd64.deb"
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: '*.deb'
+
+  fedora:
+    runs-on: ubuntu-latest
+    container: fedora:latest
+    steps:
+      - name: install deps
+        run: |
+          dnf install -y \
+            meson ninja-build glslang vulkan-loader-devel libX11-devel pkgconf-pkg-config \
+            gcc-c++ rpm-build rpmdevtools git tar
+
+      - uses: actions/checkout@v4
+
+      - name: build .rpm
+        run: |
+          ver="${GITHUB_REF_NAME#v}"
+          [ -z "$ver" ] && ver="0.0.0"
+          rpmdev-setuptree
+          # bundle the source as a tarball for rpmbuild
+          tar --exclude='./.git' --exclude='./build' --exclude='./builddir' \
+              --exclude='./refs' --transform "s,^\.,vksumi-${ver}," \
+              -czf ~/rpmbuild/SOURCES/vksumi-${ver}.tar.gz .
+          sed "s/__VERSION__/${ver}/g" packaging/vksumi.spec > ~/rpmbuild/SPECS/vksumi.spec
+          rpmbuild -bb ~/rpmbuild/SPECS/vksumi.spec
+          mv ~/rpmbuild/RPMS/x86_64/*.rpm .
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: '*.rpm'
+
+  flatpak:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        branch: ['24.08', '25.08']
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-24.08
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install runtime + i386 build deps
+        run: |
+          flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y flathub \
+            org.freedesktop.Platform//${{ matrix.branch }} \
+            org.freedesktop.Sdk//${{ matrix.branch }} \
+            org.freedesktop.Sdk.Compat.i386//${{ matrix.branch }} \
+            org.freedesktop.Sdk.Extension.toolchain-i386//${{ matrix.branch }}
+
+      - name: build + bundle
+        run: |
+          sed -i "s/24\.08/${{ matrix.branch }}/g" \
+            packaging/flatpak/org.freedesktop.Platform.VulkanLayer.vkSumi.yml
+          flatpak-builder --user --disable-rofiles-fuse --force-clean --repo=repo build \
+            packaging/flatpak/org.freedesktop.Platform.VulkanLayer.vkSumi.yml
+          flatpak build-bundle --runtime repo "vkSumi-${{ matrix.branch }}.flatpak" \
+            org.freedesktop.Platform.VulkanLayer.vkSumi ${{ matrix.branch }}
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: '*.flatpak'

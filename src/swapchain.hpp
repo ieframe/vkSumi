@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vulkan/vulkan.h>
+#include <vulkan/vk_layer.h>
 
 #include <memory>
 #include <vector>
@@ -17,6 +18,13 @@ namespace vksumi
         uint32_t          graphicsFamily = UINT32_MAX;
         DeviceDispatch    vkd{};
         InstanceDispatch  vki{};
+
+        PFN_vkSetDeviceLoaderData pfnSetDeviceLoaderData = nullptr;
+
+        VkResult setLoaderData(void* dispatchable) const
+        {
+            return pfnSetDeviceLoaderData ? pfnSetDeviceLoaderData(device, dispatchable) : VK_SUCCESS;
+        }
     };
 
     class SwapchainState

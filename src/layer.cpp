@@ -36,10 +36,10 @@ namespace vksumi
         return p;
     }
 
-    static VkLayerDeviceCreateInfo* findDeviceChainInfo(const VkDeviceCreateInfo* info)
+    static VkLayerDeviceCreateInfo* findDeviceChainInfo(const VkDeviceCreateInfo* info, VkLayerFunction function)
     {
         auto* p = reinterpret_cast<VkLayerDeviceCreateInfo*>(const_cast<void*>(info->pNext));
-        while (p && !(p->sType == VK_STRUCTURE_TYPE_LOADER_DEVICE_CREATE_INFO && p->function == VK_LAYER_LINK_INFO))
+        while (p && !(p->sType == VK_STRUCTURE_TYPE_LOADER_DEVICE_CREATE_INFO && p->function == function))
             p = reinterpret_cast<VkLayerDeviceCreateInfo*>(const_cast<void*>(p->pNext));
         return p;
     }
@@ -124,7 +124,7 @@ namespace vksumi
     {
         VKSUMI_TRACE("vkCreateDevice");
 
-        VkLayerDeviceCreateInfo* chain = findDeviceChainInfo(pCreateInfo);
+        VkLayerDeviceCreateInfo* chain = findDeviceChainInfo(pCreateInfo, VK_LAYER_LINK_INFO);
         if (!chain) return VK_ERROR_INITIALIZATION_FAILED;
 
         PFN_vkGetInstanceProcAddr nextGipa = chain->u.pLayerInfo->pfnNextGetInstanceProcAddr;
@@ -140,6 +140,8 @@ namespace vksumi
         DeviceState state{};
         state.device         = *pDevice;
         state.physicalDevice = physicalDevice;
+        if (auto* cb = findDeviceChainInfo(pCreateInfo, VK_LOADER_DATA_CALLBACK))
+            state.pfnSetDeviceLoaderData = cb->u.pfnSetDeviceLoaderData;
 
         {
             scoped_lock l(g_lock);
@@ -150,7 +152,10 @@ namespace vksumi
         uint32_t qIdx = 0;
         pickGraphicsQueue(state.vki, physicalDevice, pCreateInfo, state.graphicsFamily, qIdx);
         if (state.graphicsFamily != UINT32_MAX)
+        {
             state.vkd.GetDeviceQueue(*pDevice, state.graphicsFamily, qIdx, &state.graphicsQueue);
+            state.setLoaderData(state.graphicsQueue);
+        }
 
         registerDevice(*pDevice, state);
         return VK_SUCCESS;

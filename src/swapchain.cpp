@@ -500,7 +500,11 @@ namespace vksumi
         ai.level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
         ai.commandBufferCount = n;
         m_cmdBuffers.resize(n);
-        return vkd.AllocateCommandBuffers(m_dev.device, &ai, m_cmdBuffers.data()) == VK_SUCCESS;
+        if (vkd.AllocateCommandBuffers(m_dev.device, &ai, m_cmdBuffers.data()) != VK_SUCCESS) return false;
+
+        for (VkCommandBuffer cb : m_cmdBuffers)
+            if (m_dev.setLoaderData(cb) != VK_SUCCESS) return false;
+        return true;
     }
 
     bool SwapchainState::initSemaphores()

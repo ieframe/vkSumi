@@ -59,6 +59,11 @@ namespace vksumi
 
 # vignette    = 0.0
 
+# shadow_tint        = 0.0
+# shadow_tint_hue    = 190
+# highlight_tint     = 0.0
+# highlight_tint_hue = 35
+
 # daltonize          = off
 # daltonize_severity = 1.0
 # daltonize_strength = 1.0
@@ -194,6 +199,10 @@ namespace vksumi
             F(midtones)
             F(highlights)
             F(vignette)
+            F(shadow_tint)
+            F(shadow_tint_hue)
+            F(highlight_tint)
+            F(highlight_tint_hue)
             #undef F
             if (key == "daltonize")          { cfg.daltonize.type = daltonizeFromStr(val); return; }
             if (key == "daltonize_severity") { parseFloat(val, cfg.daltonize.severity); return; }

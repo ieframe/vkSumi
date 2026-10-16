@@ -29,9 +29,14 @@ namespace vksumi
         float midtones    = 0.0f;
         float highlights  = 0.0f;
         float vignette    = 0.0f;
+
+        float shadow_tint        = 0.0f;
+        float shadow_tint_hue    = 190.0f;
+        float highlight_tint     = 0.0f;
+        float highlight_tint_hue = 35.0f;
     };
 
-    static_assert(sizeof(Knobs) == 64, "Knobs layout drift");
+    static_assert(sizeof(Knobs) == 80, "Knobs layout drift");
 
     enum class Daltonize : int { Off, Protan, Deutan, Tritan };
 

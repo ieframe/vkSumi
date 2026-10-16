@@ -28,6 +28,11 @@ layout(set = 0, binding = 1) uniform Params {
     float highlights;
     float vignette;
 
+    float shadow_tint;
+    float shadow_tint_hue;
+    float highlight_tint;
+    float highlight_tint_hue;
+
     mat3  cvd;
     float cvd_strength;
 
@@ -52,6 +57,21 @@ vec3 hsv2rgb(vec3 c)
 }
 
 float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
+
+// weights split the image into dark, mid and bright bands
+vec3 bandWeights(vec3 c)
+{
+    float l         = clamp(luma(c), 0.0, 1.0);
+    float shadow    = pow(1.0 - l, 2.0);
+    float highlight = pow(l, 2.0);
+    return vec3(shadow, 1.0 - shadow - highlight, highlight);
+}
+
+vec3 hueChroma(float hue_deg)
+{
+    vec3 tint = hsv2rgb(vec3(fract(hue_deg / 360.0), 1.0, 1.0));
+    return tint - luma(tint);
+}
 
 vec3 daltonize(vec3 c, mat3 simulation, float strength)
 {
@@ -89,10 +109,8 @@ vec3 censorColor(vec2 uv, float mode, float strength)
     return texture(uSrc, (floor(uv * res / g) + 0.5) * g / res).rgb;
 }
 
-void main()
+vec3 grade(vec3 c, vec2 uv)
 {
-    vec3 c = texture(uSrc, vUV).rgb;
-
     c *= exp2(K.exposure);
 
     c *= vec3(1.0) + vec3(K.red_gain, K.green_gain, K.blue_gain);
@@ -107,14 +125,10 @@ void main()
 
     c += K.brightness;
 
-    // weights split the image into dark, mid and bright bands
-    float l = clamp(luma(c), 0.0, 1.0);
-    float shadow_w    = pow(1.0 - l, 2.0);
-    float highlight_w = pow(l, 2.0);
-    float mid_w       = 1.0 - shadow_w - highlight_w;
-    c += K.shadows    * shadow_w;
-    c += K.highlights * highlight_w;
-    c *= 1.0 + K.midtones * mid_w;
+    vec3 band = bandWeights(c);
+    c += K.shadows    * band.x;
+    c += K.highlights * band.z;
+    c *= 1.0 + K.midtones * band.y;
 
     float gy = luma(c);
     c = mix(vec3(gy), c, 1.0 + K.saturation);
@@ -135,11 +149,22 @@ void main()
     if (abs(K.gamma) > 0.001)
         c = pow(max(c, vec3(0.0)), vec3(1.0 / exp2(K.gamma)));
 
+    vec3 tone = bandWeights(c);
+    c += hueChroma(K.shadow_tint_hue)    * tone.x * K.shadow_tint;
+    c += hueChroma(K.highlight_tint_hue) * tone.z * K.highlight_tint;
+
     if (K.cvd_strength > 0.0)
         c = daltonize(c, K.cvd, K.cvd_strength);
 
-    float corner = length(vUV - 0.5) * 1.41421356;
+    float corner = length(uv - 0.5) * 1.41421356;
     c *= 1.0 - K.vignette * smoothstep(0.3, 1.0, corner);
+
+    return c;
+}
+
+void main()
+{
+    vec3 c = grade(texture(uSrc, vUV).rgb, vUV);
 
     for (int i = 0; i < MAX_CENSOR; ++i)
     {
@@ -147,7 +172,7 @@ void main()
         if (rect.z <= 0.0) continue;
         vec4 prm = K.region[i].param;
         float m = censorMask(vUV, rect, prm.y, prm.z);
-        if (m > 0.0) c = mix(c, censorColor(vUV, prm.w, prm.x), m);
+        if (m > 0.0) c = mix(c, grade(censorColor(vUV, prm.w, prm.x), vUV), m);
     }
 
     oColor = vec4(c, 1.0);

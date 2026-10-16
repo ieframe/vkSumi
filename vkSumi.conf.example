@@ -37,6 +37,12 @@ shadows     = 0.0
 midtones    = 0.0
 highlights  = 0.0
 
+# split toning
+shadow_tint        = 0.0    # [0 .. 1], tints the dark parts
+shadow_tint_hue    = 190    # [0 .. 360], 190 = teal
+highlight_tint     = 0.0    # [0 .. 1], tints the bright parts
+highlight_tint_hue = 35     # [0 .. 360], 35 = warm orange
+
 # lens
 vignette    = 0.0    # [0 .. 1], darkens toward the corners
 

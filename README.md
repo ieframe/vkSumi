@@ -96,6 +96,11 @@ shadows     = 0.0    # to increase shadows depth go negative (-)
 midtones    = 0.0
 highlights  = 0.0
 
+shadow_tint        = 0.0    # [0 .. 1]
+shadow_tint_hue    = 190    # [0 .. 360]
+highlight_tint     = 0.0    # [0 .. 1]
+highlight_tint_hue = 35     # [0 .. 360]
+
 vignette    = 0.0    # [0 .. 1], darkens toward the corners
 
 daltonize          = off    # off | protan | deutan | tritan

@@ -9,7 +9,6 @@
 
 namespace vksumi
 {
-    // cached per-device stuff the swapchain code wants
     struct DeviceState
     {
         VkDevice          device         = VK_NULL_HANDLE;
@@ -44,6 +43,7 @@ namespace vksumi
         SwapchainState(const DeviceState& dev, VkSwapchainKHR sc, VkExtent2D extent, VkFormat fmt);
 
         bool initImages(const VkSwapchainCreateInfoKHR& createInfo);
+        bool initParamBuffers();
         bool initSampler();
         bool initRenderPass();
         bool initDescriptorLayout();
@@ -67,6 +67,10 @@ namespace vksumi
         std::vector<VkImage>         m_fakeImages;
         std::vector<VkDeviceMemory>  m_fakeMemory;
         std::vector<VkImageView>     m_fakeViews;
+
+        std::vector<VkBuffer>        m_paramBuffers;
+        std::vector<VkDeviceMemory>  m_paramMemory;
+        std::vector<void*>           m_paramMapped;
 
         VkSampler                    m_sampler        = VK_NULL_HANDLE;
         VkRenderPass                 m_renderPass     = VK_NULL_HANDLE;

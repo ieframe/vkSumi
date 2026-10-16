@@ -35,6 +35,13 @@ namespace vksumi
             return UINT32_MAX;
         }
 
+        VkPhysicalDeviceMemoryProperties memoryProperties(const DeviceState& dev)
+        {
+            VkPhysicalDeviceMemoryProperties mp{};
+            dev.vki.GetPhysicalDeviceMemoryProperties(dev.physicalDevice, &mp);
+            return mp;
+        }
+
         void barrier(const DeviceDispatch& vkd,
                      VkCommandBuffer       cb,
                      VkImage               image,
@@ -127,6 +134,8 @@ namespace vksumi
         for (auto v  : m_fakeViews)    if (v)  vkd.DestroyImageView(m_dev.device, v, nullptr);
         for (auto i  : m_fakeImages)   if (i)  vkd.DestroyImage(m_dev.device, i, nullptr);
         for (auto m  : m_fakeMemory)   if (m)  vkd.FreeMemory(m_dev.device, m, nullptr);
+        for (auto b  : m_paramBuffers) if (b)  vkd.DestroyBuffer(m_dev.device, b, nullptr);
+        for (auto m  : m_paramMemory)  if (m)  vkd.FreeMemory(m_dev.device, m, nullptr);
     }
 
     bool SwapchainState::initImages(const VkSwapchainCreateInfoKHR& createInfo)
@@ -138,8 +147,7 @@ namespace vksumi
         m_realImages.resize(count);
         vkd.GetSwapchainImagesKHR(m_dev.device, m_realSwapchain, &count, m_realImages.data());
 
-        VkPhysicalDeviceMemoryProperties memProps{};
-        m_dev.vki.GetPhysicalDeviceMemoryProperties(m_dev.physicalDevice, &memProps);
+        const VkPhysicalDeviceMemoryProperties memProps = memoryProperties(m_dev);
 
         m_fakeImages.resize(count, VK_NULL_HANDLE);
         m_fakeMemory.resize(count, VK_NULL_HANDLE);
@@ -195,6 +203,48 @@ namespace vksumi
             vc.image = m_realImages[i];
             if (vkd.CreateImageView(m_dev.device, &vc, nullptr, &m_realViews[i]) != VK_SUCCESS)
             { VKSUMI_LOG("CreateImageView(real[%u]) failed", i); return false; }
+        }
+
+        return true;
+    }
+
+    bool SwapchainState::initParamBuffers()
+    {
+        const auto& vkd = m_dev.vkd;
+        const uint32_t n = static_cast<uint32_t>(m_realImages.size());
+        const VkPhysicalDeviceMemoryProperties memProps = memoryProperties(m_dev);
+
+        m_paramBuffers.resize(n, VK_NULL_HANDLE);
+        m_paramMemory .resize(n, VK_NULL_HANDLE);
+        m_paramMapped .resize(n, nullptr);
+
+        for (uint32_t i = 0; i < n; ++i)
+        {
+            VkBufferCreateInfo bc{};
+            bc.sType       = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+            bc.size        = sizeof(GradeParams);
+            bc.usage       = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+            bc.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+            if (vkd.CreateBuffer(m_dev.device, &bc, nullptr, &m_paramBuffers[i]) != VK_SUCCESS)
+            { VKSUMI_LOG("CreateBuffer(params[%u]) failed", i); return false; }
+
+            VkMemoryRequirements mr{};
+            vkd.GetBufferMemoryRequirements(m_dev.device, m_paramBuffers[i], &mr);
+
+            uint32_t mt = findMemoryType(memProps, mr.memoryTypeBits,
+                                         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+            if (mt == UINT32_MAX) { VKSUMI_LOG("no HOST_VISIBLE|HOST_COHERENT memory type"); return false; }
+
+            VkMemoryAllocateInfo ma{};
+            ma.sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+            ma.allocationSize  = mr.size;
+            ma.memoryTypeIndex = mt;
+            if (vkd.AllocateMemory(m_dev.device, &ma, nullptr, &m_paramMemory[i]) != VK_SUCCESS)
+            { VKSUMI_LOG("AllocateMemory(params[%u]) failed", i); return false; }
+
+            vkd.BindBufferMemory(m_dev.device, m_paramBuffers[i], m_paramMemory[i], 0);
+            if (vkd.MapMemory(m_dev.device, m_paramMemory[i], 0, VK_WHOLE_SIZE, 0, &m_paramMapped[i]) != VK_SUCCESS)
+            { VKSUMI_LOG("MapMemory(params[%u]) failed", i); return false; }
         }
 
         return true;
@@ -256,17 +306,22 @@ namespace vksumi
 
     bool SwapchainState::initDescriptorLayout()
     {
-        VkDescriptorSetLayoutBinding b{};
-        b.binding         = 0;
-        b.descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        b.descriptorCount = 1;
-        b.stageFlags      = VK_SHADER_STAGE_FRAGMENT_BIT;
-        b.pImmutableSamplers = &m_sampler;
+        VkDescriptorSetLayoutBinding b[2]{};
+        b[0].binding            = 0;
+        b[0].descriptorType     = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        b[0].descriptorCount    = 1;
+        b[0].stageFlags         = VK_SHADER_STAGE_FRAGMENT_BIT;
+        b[0].pImmutableSamplers = &m_sampler;
+
+        b[1].binding            = 1;
+        b[1].descriptorType     = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        b[1].descriptorCount    = 1;
+        b[1].stageFlags         = VK_SHADER_STAGE_FRAGMENT_BIT;
 
         VkDescriptorSetLayoutCreateInfo c{};
         c.sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        c.bindingCount = 1;
-        c.pBindings    = &b;
+        c.bindingCount = 2;
+        c.pBindings    = b;
         return m_dev.vkd.CreateDescriptorSetLayout(m_dev.device, &c, nullptr, &m_dsLayout) == VK_SUCCESS;
     }
 
@@ -284,17 +339,10 @@ namespace vksumi
         sm.pCode    = color_frag;
         if (vkd.CreateShaderModule(m_dev.device, &sm, nullptr, &m_frag) != VK_SUCCESS) return false;
 
-        VkPushConstantRange pcr{};
-        pcr.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-        pcr.offset     = 0;
-        pcr.size       = sizeof(FragPush);
-
         VkPipelineLayoutCreateInfo pl{};
-        pl.sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        pl.setLayoutCount         = 1;
-        pl.pSetLayouts            = &m_dsLayout;
-        pl.pushConstantRangeCount = 1;
-        pl.pPushConstantRanges    = &pcr;
+        pl.sType          = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        pl.setLayoutCount = 1;
+        pl.pSetLayouts    = &m_dsLayout;
         if (vkd.CreatePipelineLayout(m_dev.device, &pl, nullptr, &m_pipeLayout) != VK_SUCCESS) return false;
 
         VkPipelineShaderStageCreateInfo stages[2]{};
@@ -383,15 +431,17 @@ namespace vksumi
             { VKSUMI_LOG("CreateFramebuffer[%u] failed", i); return false; }
         }
 
-        VkDescriptorPoolSize ps{};
-        ps.type            = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        ps.descriptorCount = n;
+        VkDescriptorPoolSize ps[2]{};
+        ps[0].type            = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        ps[0].descriptorCount = n;
+        ps[1].type            = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        ps[1].descriptorCount = n;
 
         VkDescriptorPoolCreateInfo dpc{};
         dpc.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
         dpc.maxSets       = n;
-        dpc.poolSizeCount = 1;
-        dpc.pPoolSizes    = &ps;
+        dpc.poolSizeCount = 2;
+        dpc.pPoolSizes    = ps;
         if (vkd.CreateDescriptorPool(m_dev.device, &dpc, nullptr, &m_dsPool) != VK_SUCCESS) return false;
 
         std::vector<VkDescriptorSetLayout> layouts(n, m_dsLayout);
@@ -410,14 +460,25 @@ namespace vksumi
             dii.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
             dii.sampler     = m_sampler;
 
-            VkWriteDescriptorSet w{};
-            w.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            w.dstSet          = m_dsets[i];
-            w.dstBinding      = 0;
-            w.descriptorCount = 1;
-            w.descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-            w.pImageInfo      = &dii;
-            vkd.UpdateDescriptorSets(m_dev.device, 1, &w, 0, nullptr);
+            VkDescriptorBufferInfo dbi{};
+            dbi.buffer = m_paramBuffers[i];
+            dbi.range  = sizeof(GradeParams);
+
+            VkWriteDescriptorSet w[2]{};
+            w[0].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            w[0].dstSet          = m_dsets[i];
+            w[0].dstBinding      = 0;
+            w[0].descriptorCount = 1;
+            w[0].descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            w[0].pImageInfo      = &dii;
+
+            w[1].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            w[1].dstSet          = m_dsets[i];
+            w[1].dstBinding      = 1;
+            w[1].descriptorCount = 1;
+            w[1].descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            w[1].pBufferInfo     = &dbi;
+            vkd.UpdateDescriptorSets(m_dev.device, 2, w, 0, nullptr);
         }
         return true;
     }
@@ -476,6 +537,7 @@ namespace vksumi
                                                                     createInfo.imageExtent,
                                                                     createInfo.imageFormat));
         if (!s->initImages(createInfo))                  return nullptr;
+        if (!s->initParamBuffers())                      return nullptr;
         if (!s->initSampler())                           return nullptr;
         if (!s->initRenderPass())                        return nullptr;
         if (!s->initDescriptorLayout())                  return nullptr;
@@ -543,11 +605,11 @@ namespace vksumi
         vkd.CmdSetViewport(cb, 0, 1, &vp);
         vkd.CmdSetScissor(cb, 0, 1, &sc);
 
+        const GradeParams params = buildGradeParams(*currentConfig());
+        std::memcpy(m_paramMapped[i], &params, sizeof(params));
+
         vkd.CmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline);
         vkd.CmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeLayout, 0, 1, &m_dsets[i], 0, nullptr);
-
-        FragPush push = buildPush(*currentConfig());
-        vkd.CmdPushConstants(cb, m_pipeLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(FragPush), &push);
 
         vkd.CmdDraw(cb, 3, 1, 0, 0);
         vkd.CmdEndRenderPass(cb);

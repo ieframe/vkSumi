@@ -37,17 +37,23 @@ shadows     = 0.0
 midtones    = 0.0
 highlights  = 0.0
 
-# privacy censor: cover a UID / name / friend code. up to 2 regions: censor0, censor1.
-# stays on even when the color filter is toggled off, so your UID never flashes.
-# format:  x, y, w, h, shape, mode, strength, feather
-#   x, y     center of the box, 0..1 across the screen (0,0 = top-left)
-#   w, h     half-size, 0..1 (so w=0.07 covers 14% of the width)
+# privacy censor for UIDs and names. up to 2 boxes: censor0 and censor1.
+# stays on when the color filter is toggled off.
+#   x, y     top-left corner, 0..1
+#   w, h     size, 0..1
 #   shape    rect | ellipse
-#   mode     pixelate | blur | fill   (pixelate is safest, blur on text can be undone)
-#   strength pixelate block size or blur radius, in pixels
-#   feather  soft edge, 0..1
-# resolution-independent, so one box works at any res.
-# censor0 = 0.88, 0.045, 0.07, 0.018, rect, pixelate, 22, 0.2
+#   mode     pixelate | blur | fill
+#   strength block size or blur radius in pixels
+#   feather  soft edge around the box, 0..1
+#   enabled  on | off
+# censor0.x        = 0.81
+# censor0.y        = 0.027
+# censor0.w        = 0.14
+# censor0.h        = 0.036
+# censor0.shape    = rect
+# censor0.mode     = pixelate
+# censor0.strength = 22
+# censor0.feather  = 0.2
 
 
 # Hotkey, two options. Pick whichever:

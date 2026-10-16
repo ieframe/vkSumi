@@ -1,13 +1,16 @@
 #include "config.hpp"
 #include "logger.hpp"
 
+#include <algorithm>
 #include <atomic>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <mutex>
 #include <string>
+#include <string_view>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 #include <unistd.h>
 #include <sys/inotify.h>
@@ -23,7 +26,6 @@ namespace vksumi
         std::shared_ptr<const Config>           g_config;
         std::atomic<bool>                       g_watcherRunning{false};
         int                                     g_watcherStopFd[2] = {-1, -1};
-        std::string                             g_watchedDir;
 
         constexpr const char* TEMPLATE = R"VKSUMI(# vkSumi per-game config, auto-created on first launch.
 # Merges on top of ~/.config/vkSumi/vkSumi.conf, only sets what's enabled in this file.
@@ -55,9 +57,15 @@ namespace vksumi
 
 # toggle_keys = Shift_R+F9
 
-# privacy censor: x, y, w, h, shape(rect|ellipse), mode(pixelate|blur|fill), strength_px, feather
-# censor0 = 0.88, 0.045, 0.07, 0.018, rect, pixelate, 22, 0.2
+# privacy censor, up to 2 boxes: censor0 and censor1. see vkSumi.conf.example for every field.
+# censor0.enabled = false
+# censor0.x        = 0.81
+# censor0.y        = 0.027
+# censor0.w        = 0.14
+# censor0.h        = 0.036
 )VKSUMI";
+
+        constexpr std::string_view kCensorPrefix = "censor";
 
         std::string trim(const std::string& s)
         {
@@ -111,36 +119,41 @@ namespace vksumi
             return path;
         }
 
-        int censorShapeFromStr(const std::string& s)
+        CensorShape censorShapeFromStr(const std::string& s)
         {
-            return (s == "ellipse" || s == "1") ? 1 : 0;
+            return s == "ellipse" ? CensorShape::Ellipse : CensorShape::Rect;
         }
 
-        int censorModeFromStr(const std::string& s)
+        CensorMode censorModeFromStr(const std::string& s)
         {
-            if (s == "blur" || s == "1") return 1;
-            if (s == "fill" || s == "2") return 2;
-            return 0;
+            if (s == "blur") return CensorMode::Blur;
+            if (s == "fill") return CensorMode::Fill;
+            return CensorMode::Pixelate;
         }
 
-        bool parseCensor(const std::string& v, CensorRegion& r)
+        bool applyCensorKey(Config& cfg, const std::string& key, const std::string& val)
         {
-            std::vector<std::string> f;
-            size_t start = 0;
-            for (size_t i = 0; i <= v.size(); ++i)
-                if (i == v.size() || v[i] == ',')
-                { f.push_back(trim(v.substr(start, i - start))); start = i + 1; }
+            const size_t dot = key.find('.');
+            if (key.rfind(kCensorPrefix, 0) != 0 || dot != kCensorPrefix.size() + 1) return false;
 
-            if (f.size() < 4) return false;
-            if (!parseFloat(f[0], r.cx) || !parseFloat(f[1], r.cy) ||
-                !parseFloat(f[2], r.rx) || !parseFloat(f[3], r.ry)) return false;
+            const size_t idx = static_cast<size_t>(key[kCensorPrefix.size()] - '0');
+            if (idx >= kMaxCensor) return false;
 
-            if (f.size() > 4) r.shape = censorShapeFromStr(f[4]);
-            if (f.size() > 5) r.mode  = censorModeFromStr(f[5]);
-            if (f.size() > 6) parseFloat(f[6], r.strength);
-            if (f.size() > 7) parseFloat(f[7], r.feather);
-            r.enabled = true;
-            return true;
+            CensorRegion&     r     = cfg.censors[idx];
+            const std::string field = key.substr(dot + 1);
+
+            #define F(name) if (field == #name) { parseFloat(val, r.name); return true; }
+            F(x)
+            F(y)
+            F(w)
+            F(h)
+            F(strength)
+            F(feather)
+            #undef F
+            if (field == "enabled") { r.enabled = parseBool(val, r.enabled); return true; }
+            if (field == "shape")   { r.shape   = censorShapeFromStr(val);    return true; }
+            if (field == "mode")    { r.mode    = censorModeFromStr(val);     return true; }
+            return false;
         }
 
         void applyKey(Config& cfg, const std::string& key, const std::string& val)
@@ -166,13 +179,7 @@ namespace vksumi
             if (key == "toggle_keys") { cfg.toggle_keys = val; return; }
             if (key == "VKSUMI_CONFIG_FILE") { cfg.vksumi_config_file = expandPath(val); return; }
             if (key == "PER_GAME_CONFIG_CREATION") { cfg.per_game_config_creation = parseBool(val, true); return; }
-            if (key.rfind("censor", 0) == 0 && key.size() == 7)
-            {
-                int idx = key[6] - '0';
-                if (idx >= 0 && idx < static_cast<int>(kMaxCensor))
-                    parseCensor(val, cfg.censors[idx]);
-                return;
-            }
+            if (applyCensorKey(cfg, key, val)) return;
             VKSUMI_TRACE("conf: unknown key '%s'", key.c_str());
         }
 
@@ -203,6 +210,19 @@ namespace vksumi
             if (fwd != std::string::npos) cut = fwd;
             if (bwd != std::string::npos && (cut == std::string::npos || bwd > cut)) cut = bwd;
             return cut == std::string::npos ? path : path.substr(cut + 1);
+        }
+
+        std::string dirname(const std::string& path)
+        {
+            size_t cut = path.find_last_of('/');
+            return cut == std::string::npos ? "." : path.substr(0, cut);
+        }
+
+        std::string absolutePath(const std::string& path)
+        {
+            if (path.empty() || path[0] == '/') return path;
+            char cwd[4096];
+            return getcwd(cwd, sizeof(cwd)) ? std::string(cwd) + "/" + path : path;
         }
 
         bool endsWithIcase(const std::string& s, const std::string& suffix)
@@ -275,7 +295,6 @@ namespace vksumi
             return xdg + "/vkSumi";
         }
 
-        // drop the .exe suffix so we get "Game.conf" not "Game.exe.conf", looks nicer
         std::string perGameConfName()
         {
             std::string b = exeBasename();
@@ -291,21 +310,19 @@ namespace vksumi
             return n.empty() ? std::string{} : configHomeDir() + "/games/" + n;
         }
 
-        std::vector<std::string> buildLadder(std::string& outConfigDir)
+        std::vector<std::string> buildLadder()
         {
             std::vector<std::string> ladder;
-            std::string home = configHomeDir();
-            outConfigDir     = home;
 
-            ladder.push_back(home + "/vkSumi.conf");                            // global
+            ladder.push_back(configHomeDir() + "/vkSumi.conf");
 
             std::string per = perGameConfPath();
-            if (!per.empty()) ladder.push_back(per);                            // per-game
+            if (!per.empty()) ladder.push_back(per);
 
-            ladder.push_back("./vkSumi.conf");                                  // game install dir
+            ladder.push_back(absolutePath("vkSumi.conf"));
 
-            if (const char* p = std::getenv("VKSUMI_CONFIG_FILE"))              // explicit override
-                ladder.emplace_back(p);
+            if (const char* p = std::getenv("VKSUMI_CONFIG_FILE"))
+                ladder.push_back(absolutePath(p));
 
             return ladder;
         }
@@ -330,8 +347,8 @@ namespace vksumi
     std::shared_ptr<const Config> loadConfig()
     {
         auto cfg = std::make_shared<Config>();
-        std::string watchDir;
-        auto ladder = buildLadder(watchDir);
+        auto ladder = buildLadder();
+        auto searchPaths = ladder;
 
         bool any = false;
 
@@ -342,9 +359,10 @@ namespace vksumi
                 any = true;
                 if (!cfg->vksumi_config_file.empty())
                 {
-                    std::string redirect = cfg->vksumi_config_file;
+                    std::string redirect = absolutePath(cfg->vksumi_config_file);
                     *cfg = Config();
                     ladder[0] = redirect;
+                    searchPaths.push_back(redirect);
                     any = false;
                 }
                 else
@@ -366,8 +384,7 @@ namespace vksumi
         else
             VKSUMI_LOG("no config files found, using defaults");
 
-        std::lock_guard<std::mutex> l(g_configMutex);
-        if (g_watchedDir.empty()) g_watchedDir = watchDir;
+        cfg->search_paths = std::move(searchPaths);
         return cfg;
     }
 
@@ -389,38 +406,45 @@ namespace vksumi
         g_config = std::move(next);
     }
 
-    FragPush buildPush(const Config& cfg)
+    GradeParams buildGradeParams(const Config& cfg)
     {
-        FragPush p{};
+        GradeParams p{};
         p.knobs = cfg.enabled ? cfg.knobs : Knobs{};
         for (size_t i = 0; i < kMaxCensor; ++i)
         {
             const CensorRegion& r = cfg.censors[i];
-            if (!r.enabled) continue;
-            p.region[i] = { r.cx, r.cy, r.rx, r.ry,
+            if (!r.enabled || r.w <= 0.0f || r.h <= 0.0f) continue;
+            const float rx = r.w * 0.5f;
+            const float ry = r.h * 0.5f;
+            p.region[i] = { r.x + rx, r.y + ry, rx, ry,
                             r.strength, r.feather,
                             static_cast<float>(r.shape), static_cast<float>(r.mode) };
         }
         return p;
     }
 
-    static void watcherLoop(std::string watchDir)
+    static void watcherLoop()
     {
         int ifd = inotify_init1(IN_NONBLOCK | IN_CLOEXEC);
         if (ifd < 0) { VKSUMI_LOG("inotify_init1 failed: %s", std::strerror(errno)); return; }
 
-        mkdir_p(watchDir);
-        mkdir_p(watchDir + "/games");
+        mkdir_p(configHomeDir() + "/games");
         const uint32_t mask = IN_MODIFY | IN_CLOSE_WRITE | IN_MOVED_TO | IN_CREATE;
-        int wd_root  = inotify_add_watch(ifd, watchDir.c_str(),              mask);
-        int wd_games = inotify_add_watch(ifd, (watchDir + "/games").c_str(), mask);
-        if (wd_root < 0 && wd_games < 0)
-        {
-            VKSUMI_LOG("inotify_add_watch(%s) failed: %s", watchDir.c_str(), std::strerror(errno));
-            close(ifd); return;
-        }
 
-        VKSUMI_LOG("watching %s (and games/) for conf changes", watchDir.c_str());
+        std::unordered_map<int, std::string> watchedDirs;
+        auto syncWatches = [&](const Config& cfg)
+        {
+            for (const auto& path : cfg.search_paths)
+            {
+                const std::string dir = dirname(path);
+                int wd = inotify_add_watch(ifd, dir.c_str(), mask);
+                if (wd < 0) { VKSUMI_TRACE("inotify_add_watch(%s) failed: %s", dir.c_str(), std::strerror(errno)); continue; }
+                if (watchedDirs.emplace(wd, dir).second) VKSUMI_LOG("watching %s for conf changes", dir.c_str());
+            }
+        };
+
+        syncWatches(*currentConfig());
+        if (watchedDirs.empty()) { close(ifd); return; }
 
         struct pollfd pfds[2];
         pfds[0] = { ifd,                  POLLIN, 0 };
@@ -438,27 +462,31 @@ namespace vksumi
             ssize_t got = read(ifd, buf, sizeof(buf));
             if (got <= 0) continue;
 
+            const auto  cfg   = currentConfig();
+            const auto& paths = cfg->search_paths;
             bool need_reload = false;
             for (char* p = buf; p < buf + got; )
             {
                 auto* ev = reinterpret_cast<struct inotify_event*>(p);
-                if (ev->len > 0)
+                auto  it = watchedDirs.find(ev->wd);
+                if (ev->len > 0 && it != watchedDirs.end())
                 {
-                    const char* dot = std::strrchr(ev->name, '.');
-                    if (dot && std::strcmp(dot, ".conf") == 0) need_reload = true;
+                    const std::string full = it->second + "/" + ev->name;
+                    if (std::find(paths.begin(), paths.end(), full) != paths.end()) need_reload = true;
                 }
                 p += sizeof(struct inotify_event) + ev->len;
             }
 
             if (need_reload)
             {
-                setCurrentConfig(loadConfig());
+                auto next = loadConfig();
+                setCurrentConfig(next);
+                syncWatches(*next);
                 VKSUMI_LOG("config reloaded");
             }
         }
 
-        if (wd_root  >= 0) inotify_rm_watch(ifd, wd_root);
-        if (wd_games >= 0) inotify_rm_watch(ifd, wd_games);
+        for (const auto& [wd, dir] : watchedDirs) inotify_rm_watch(ifd, wd);
         close(ifd);
     }
 
@@ -467,13 +495,8 @@ namespace vksumi
         bool expected = false;
         if (!g_watcherRunning.compare_exchange_strong(expected, true)) return;
 
-        (void)currentConfig();
-        std::string dir;
-        { std::lock_guard<std::mutex> l(g_configMutex); dir = g_watchedDir; }
-        if (dir.empty()) { g_watcherRunning.store(false); return; }
-
         if (pipe(g_watcherStopFd) != 0) { g_watcherRunning.store(false); return; }
-        std::thread(watcherLoop, dir).detach();
+        std::thread(watcherLoop).detach();
     }
 
     void stopConfigWatcher()

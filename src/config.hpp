@@ -7,29 +7,28 @@
 
 namespace vksumi
 {
-    // push-constant block, matches color.frag's Knobs layout exactly.
-    // 0 = no change for every knob. positive = more / brighter.
+    // matches color.frag's Params block layout exactly.
     struct alignas(16) Knobs
     {
-        float brightness = 0.0f;   // [-1 .. 1]
-        float contrast   = 0.0f;   // [-1 .. 1]
-        float exposure   = 0.0f;   // EV stops, mul = 2^value, [-3 .. 3]
-        float saturation = 0.0f;   // -1 = grayscale, [-1 .. 1]
+        float brightness  = 0.0f;
+        float contrast    = 0.0f;
+        float exposure    = 0.0f;
+        float saturation  = 0.0f;
 
-        float vibrance   = 0.0f;   // smarter saturation
-        float hue_deg    = 0.0f;   // [-180 .. 180]
-        float gamma      = 0.0f;   // + brightens midtones
-        float temperature = 0.0f;  // warm(+) cool(-)
+        float vibrance    = 0.0f;
+        float hue_deg     = 0.0f;
+        float gamma       = 0.0f;
+        float temperature = 0.0f;
 
-        float tint       = 0.0f;   // magenta(+) green(-)
-        float red_gain   = 0.0f;
-        float green_gain = 0.0f;
-        float blue_gain  = 0.0f;
+        float tint        = 0.0f;
+        float red_gain    = 0.0f;
+        float green_gain  = 0.0f;
+        float blue_gain   = 0.0f;
 
-        float shadows    = 0.0f;
-        float midtones   = 0.0f;
-        float highlights = 0.0f;
-        float _pad       = 0.0f;
+        float shadows     = 0.0f;
+        float midtones    = 0.0f;
+        float highlights  = 0.0f;
+        float _pad        = 0.0f;
     };
 
     static_assert(sizeof(Knobs) == 64, "Knobs layout drift");
@@ -39,13 +38,13 @@ namespace vksumi
 
     struct CensorRegion
     {
-        bool  enabled  = false;
-        float cx = 0.5f, cy = 0.5f;
-        float rx = 0.05f, ry = 0.03f;
-        int   shape    = static_cast<int>(CensorShape::Rect);
-        int   mode     = static_cast<int>(CensorMode::Pixelate);
-        float strength = 24.0f;
-        float feather  = 0.2f;
+        bool        enabled  = true;
+        float       x = 0.0f, y = 0.0f;
+        float       w = 0.0f, h = 0.0f;
+        CensorShape shape    = CensorShape::Rect;
+        CensorMode  mode     = CensorMode::Pixelate;
+        float       strength = 24.0f;
+        float       feather  = 0.2f;
     };
 
     inline constexpr size_t kMaxCensor = 2;
@@ -57,12 +56,11 @@ namespace vksumi
     };
     static_assert(sizeof(CensorGPU) == 32, "CensorGPU layout drift");
 
-    struct FragPush
+    struct GradeParams
     {
         Knobs     knobs;
         CensorGPU region[kMaxCensor];
     };
-    static_assert(sizeof(FragPush) == 128, "FragPush over push-constant budget");
 
     struct Config
     {
@@ -71,6 +69,7 @@ namespace vksumi
         bool        enabled     = true;
         std::string toggle_keys = "Shift_R+F9";
         std::vector<std::string> sources;
+        std::vector<std::string> search_paths;
         std::string vksumi_config_file;
         bool        per_game_config_creation = true;
     };
@@ -79,7 +78,7 @@ namespace vksumi
     std::shared_ptr<const Config> currentConfig();
     void                          setCurrentConfig(std::shared_ptr<const Config> next);
 
-    FragPush buildPush(const Config& cfg);
+    GradeParams buildGradeParams(const Config& cfg);
 
     void startConfigWatcher();
     void stopConfigWatcher();

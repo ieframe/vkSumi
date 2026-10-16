@@ -25,6 +25,11 @@
     FORVKFUNC(GetImageMemoryRequirements) \
     FORVKFUNC(AllocateMemory) \
     FORVKFUNC(FreeMemory) \
+    FORVKFUNC(MapMemory) \
+    FORVKFUNC(CreateBuffer) \
+    FORVKFUNC(DestroyBuffer) \
+    FORVKFUNC(BindBufferMemory) \
+    FORVKFUNC(GetBufferMemoryRequirements) \
     FORVKFUNC(CreateImageView) \
     FORVKFUNC(DestroyImageView) \
     FORVKFUNC(CreateSampler) \
@@ -56,7 +61,6 @@
     FORVKFUNC(CmdEndRenderPass) \
     FORVKFUNC(CmdBindPipeline) \
     FORVKFUNC(CmdBindDescriptorSets) \
-    FORVKFUNC(CmdPushConstants) \
     FORVKFUNC(CmdSetViewport) \
     FORVKFUNC(CmdSetScissor) \
     FORVKFUNC(CmdDraw) \

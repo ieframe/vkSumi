@@ -98,6 +98,10 @@ highlights  = 0.0
 
 vignette    = 0.0    # [0 .. 1], darkens toward the corners
 
+daltonize          = off    # off | protan | deutan | tritan
+daltonize_severity = 1.0    # [0 .. 1]
+daltonize_strength = 1.0    # [0 .. 1]
+
 PER_GAME_CONFIG_CREATION=true     # per-game .conf file creation (true by default)
 VKSUMI_CONFIG_FILE=path/to/.conf  # path to another .conf file that act as a global substitute
 ```

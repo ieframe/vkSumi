@@ -28,6 +28,9 @@ layout(set = 0, binding = 1) uniform Params {
     float highlights;
     float vignette;
 
+    mat3  cvd;
+    float cvd_strength;
+
     Censor region[MAX_CENSOR];
 } K;
 
@@ -49,6 +52,14 @@ vec3 hsv2rgb(vec3 c)
 }
 
 float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
+
+vec3 daltonize(vec3 c, mat3 simulation, float strength)
+{
+    vec3 seen  = simulation * c;
+    vec3 lost  = c - seen;
+    vec3 shift = vec3(0.0, 0.7 * lost.r + lost.g, 0.7 * lost.r + lost.b);
+    return c + shift * strength;
+}
 
 float censorMask(vec2 uv, vec4 rect, float feather, float shape)
 {
@@ -123,6 +134,9 @@ void main()
 
     if (abs(K.gamma) > 0.001)
         c = pow(max(c, vec3(0.0)), vec3(1.0 / exp2(K.gamma)));
+
+    if (K.cvd_strength > 0.0)
+        c = daltonize(c, K.cvd, K.cvd_strength);
 
     float corner = length(vUV - 0.5) * 1.41421356;
     c *= 1.0 - K.vignette * smoothstep(0.3, 1.0, corner);

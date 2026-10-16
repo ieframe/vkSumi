@@ -1,4 +1,5 @@
 #include "config.hpp"
+#include "cvd.hpp"
 #include "logger.hpp"
 
 #include <algorithm>
@@ -57,6 +58,10 @@ namespace vksumi
 # highlights  = 0.0
 
 # vignette    = 0.0
+
+# daltonize          = off
+# daltonize_severity = 1.0
+# daltonize_strength = 1.0
 
 # toggle_keys = Shift_R+F9
 
@@ -134,6 +139,14 @@ namespace vksumi
             return CensorMode::Pixelate;
         }
 
+        Daltonize daltonizeFromStr(const std::string& s)
+        {
+            if (s == "protan") return Daltonize::Protan;
+            if (s == "deutan") return Daltonize::Deutan;
+            if (s == "tritan") return Daltonize::Tritan;
+            return Daltonize::Off;
+        }
+
         bool applyCensorKey(Config& cfg, const std::string& key, const std::string& val)
         {
             const size_t dot = key.find('.');
@@ -182,6 +195,9 @@ namespace vksumi
             F(highlights)
             F(vignette)
             #undef F
+            if (key == "daltonize")          { cfg.daltonize.type = daltonizeFromStr(val); return; }
+            if (key == "daltonize_severity") { parseFloat(val, cfg.daltonize.severity); return; }
+            if (key == "daltonize_strength") { parseFloat(val, cfg.daltonize.strength); return; }
             if (key == "enabled")     { cfg.enabled = parseBool(val, true); return; }
             if (key == "toggle_keys") { cfg.toggle_keys = val; return; }
             if (key == "VKSUMI_CONFIG_FILE") { cfg.vksumi_config_file = expandPath(val); return; }
@@ -413,10 +429,24 @@ namespace vksumi
         g_config = std::move(next);
     }
 
+    static CvdGPU buildCvd(const Daltonization& d)
+    {
+        CvdGPU g{};
+        if (d.type == Daltonize::Off) return g;
+
+        const auto m = cvdMatrix(d.type, d.severity);
+        for (size_t col = 0; col < 3; ++col)
+            for (size_t row = 0; row < 3; ++row)
+                g.columns[col][row] = m[row * 3 + col];
+        g.strength = d.strength;
+        return g;
+    }
+
     GradeParams buildGradeParams(const Config& cfg)
     {
         GradeParams p{};
         p.knobs = cfg.enabled ? cfg.knobs : Knobs{};
+        if (cfg.enabled) p.cvd = buildCvd(cfg.daltonize);
         for (size_t i = 0; i < kMaxCensor; ++i)
         {
             const CensorRegion& r = cfg.censors[i];

@@ -21,6 +21,7 @@ vksumi_src = [
     'layer.cpp',
     'vkdispatch.cpp',
     'config.cpp',
+    'cvd.cpp',
     'swapchain.cpp',
     'keybinds.cpp',
 ]

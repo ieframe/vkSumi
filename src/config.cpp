@@ -56,6 +56,8 @@ namespace vksumi
 # midtones    = 0.0
 # highlights  = 0.0
 
+# vignette    = 0.0
+
 # toggle_keys = Shift_R+F9
 
 # privacy censor, up to 8 boxes: censor0 to censor7. see vkSumi.conf.example for every field.
@@ -178,6 +180,7 @@ namespace vksumi
             F(shadows)
             F(midtones)
             F(highlights)
+            F(vignette)
             #undef F
             if (key == "enabled")     { cfg.enabled = parseBool(val, true); return; }
             if (key == "toggle_keys") { cfg.toggle_keys = val; return; }

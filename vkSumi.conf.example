@@ -37,6 +37,9 @@ shadows     = 0.0
 midtones    = 0.0
 highlights  = 0.0
 
+# lens
+vignette    = 0.0    # [0 .. 1], darkens toward the corners
+
 # privacy censor for UIDs and names. up to 8 boxes: censor0 to censor7.
 # stays on when the color filter is toggled off.
 #   x, y     top-left corner, 0..1

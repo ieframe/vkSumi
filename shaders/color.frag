@@ -26,7 +26,7 @@ layout(set = 0, binding = 1) uniform Params {
     float shadows;
     float midtones;
     float highlights;
-    float _pad;
+    float vignette;
 
     Censor region[MAX_CENSOR];
 } K;
@@ -123,6 +123,9 @@ void main()
 
     if (abs(K.gamma) > 0.001)
         c = pow(max(c, vec3(0.0)), vec3(1.0 / exp2(K.gamma)));
+
+    float corner = length(vUV - 0.5) * 1.41421356;
+    c *= 1.0 - K.vignette * smoothstep(0.3, 1.0, corner);
 
     for (int i = 0; i < MAX_CENSOR; ++i)
     {

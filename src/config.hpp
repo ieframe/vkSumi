@@ -28,7 +28,7 @@ namespace vksumi
         float shadows     = 0.0f;
         float midtones    = 0.0f;
         float highlights  = 0.0f;
-        float _pad        = 0.0f;
+        float vignette    = 0.0f;
     };
 
     static_assert(sizeof(Knobs) == 64, "Knobs layout drift");

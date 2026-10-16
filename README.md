@@ -82,6 +82,7 @@ brightness  = 0.0    # [-1 .. 1]
 contrast    = 0.0    # [-1 .. 1]
 exposure    = 0.0    # EV stops
 saturation  = 0.0    # -1 = grayscale
+vibrance    = 0.0    # smarter saturation
 hue_deg     = 0.0    # [-180 .. 180]
 gamma       = 0.0    # + brightens midtones
 temperature = 0.0    # warm (+) cool (-)
@@ -94,6 +95,8 @@ blue_gain   = 0.0
 shadows     = 0.0    # to increase shadows depth go negative (-)
 midtones    = 0.0
 highlights  = 0.0
+
+vignette    = 0.0    # [0 .. 1], darkens toward the corners
 
 PER_GAME_CONFIG_CREATION=true     # per-game .conf file creation (true by default)
 VKSUMI_CONFIG_FILE=path/to/.conf  # path to another .conf file that act as a global substitute

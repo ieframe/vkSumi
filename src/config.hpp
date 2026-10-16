@@ -47,7 +47,7 @@ namespace vksumi
         float       feather  = 0.2f;
     };
 
-    inline constexpr size_t kMaxCensor = 2;
+    inline constexpr size_t kMaxCensor = VKSUMI_MAX_CENSOR;
 
     struct alignas(16) CensorGPU
     {

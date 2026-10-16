@@ -28,7 +28,7 @@ layout(set = 0, binding = 1) uniform Params {
     float highlights;
     float _pad;
 
-    Censor region[2];
+    Censor region[MAX_CENSOR];
 } K;
 
 vec3 rgb2hsv(vec3 c)
@@ -124,7 +124,7 @@ void main()
     if (abs(K.gamma) > 0.001)
         c = pow(max(c, vec3(0.0)), vec3(1.0 / exp2(K.gamma)));
 
-    for (int i = 0; i < 2; ++i)
+    for (int i = 0; i < MAX_CENSOR; ++i)
     {
         vec4 rect = K.region[i].rect;
         if (rect.z <= 0.0) continue;

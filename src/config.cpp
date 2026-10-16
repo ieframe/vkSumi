@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <charconv>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
@@ -57,7 +58,7 @@ namespace vksumi
 
 # toggle_keys = Shift_R+F9
 
-# privacy censor, up to 2 boxes: censor0 and censor1. see vkSumi.conf.example for every field.
+# privacy censor, up to 8 boxes: censor0 to censor7. see vkSumi.conf.example for every field.
 # censor0.enabled = false
 # censor0.x        = 0.81
 # censor0.y        = 0.027
@@ -134,10 +135,13 @@ namespace vksumi
         bool applyCensorKey(Config& cfg, const std::string& key, const std::string& val)
         {
             const size_t dot = key.find('.');
-            if (key.rfind(kCensorPrefix, 0) != 0 || dot != kCensorPrefix.size() + 1) return false;
+            if (key.rfind(kCensorPrefix, 0) != 0 || dot == std::string::npos) return false;
 
-            const size_t idx = static_cast<size_t>(key[kCensorPrefix.size()] - '0');
-            if (idx >= kMaxCensor) return false;
+            const char* first = key.data() + kCensorPrefix.size();
+            const char* last  = key.data() + dot;
+            size_t idx = 0;
+            const auto [end, ec] = std::from_chars(first, last, idx);
+            if (ec != std::errc{} || end != last || idx >= kMaxCensor) return false;
 
             CensorRegion&     r     = cfg.censors[idx];
             const std::string field = key.substr(dot + 1);

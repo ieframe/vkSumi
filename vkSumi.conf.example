@@ -37,7 +37,7 @@ shadows     = 0.0
 midtones    = 0.0
 highlights  = 0.0
 
-# privacy censor for UIDs and names. up to 2 boxes: censor0 and censor1.
+# privacy censor for UIDs and names. up to 8 boxes: censor0 to censor7.
 # stays on when the color filter is toggled off.
 #   x, y     top-left corner, 0..1
 #   w, h     size, 0..1

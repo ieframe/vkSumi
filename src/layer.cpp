@@ -3,6 +3,7 @@
 
 #include <cstring>
 #include <mutex>
+#include <optional>
 #include <unordered_map>
 #include <vector>
 
@@ -20,6 +21,14 @@ namespace vksumi
     static std::unordered_map<void*, InstanceDispatch> g_instanceDispatch;
 
     using scoped_lock = std::lock_guard<std::mutex>;
+
+    static std::optional<InstanceDispatch> instanceDispatch(void* key)
+    {
+        scoped_lock l(g_lock);
+        auto it = g_instanceDispatch.find(key);
+        if (it == g_instanceDispatch.end()) return std::nullopt;
+        return it->second;
+    }
 
     static VkLayerInstanceCreateInfo* findInstanceChainInfo(const VkInstanceCreateInfo* info)
     {
@@ -77,8 +86,10 @@ namespace vksumi
         InstanceDispatch table;
         {
             scoped_lock l(g_lock);
-            table = g_instanceDispatch[dispatchKey(instance)];
-            g_instanceDispatch.erase(dispatchKey(instance));
+            auto it = g_instanceDispatch.find(dispatchKey(instance));
+            if (it == g_instanceDispatch.end()) return;
+            table = it->second;
+            g_instanceDispatch.erase(it);
         }
         table.DestroyInstance(instance, pAllocator);
     }
@@ -118,6 +129,9 @@ namespace vksumi
         VkLayerDeviceCreateInfo* chain = findDeviceChainInfo(pCreateInfo, VK_LAYER_LINK_INFO);
         if (!chain) return VK_ERROR_INITIALIZATION_FAILED;
 
+        const auto vki = instanceDispatch(dispatchKey(physicalDevice));
+        if (!vki) return VK_ERROR_INITIALIZATION_FAILED;
+
         PFN_vkGetInstanceProcAddr nextGipa = chain->u.pLayerInfo->pfnNextGetInstanceProcAddr;
         PFN_vkGetDeviceProcAddr   nextGdpa = chain->u.pLayerInfo->pfnNextGetDeviceProcAddr;
         chain->u.pLayerInfo = chain->u.pLayerInfo->pNext;
@@ -131,13 +145,10 @@ namespace vksumi
         DeviceState state{};
         state.device         = *pDevice;
         state.physicalDevice = physicalDevice;
+        state.vki            = *vki;
         if (auto* cb = findDeviceChainInfo(pCreateInfo, VK_LOADER_DATA_CALLBACK))
             state.pfnSetDeviceLoaderData = cb->u.pfnSetDeviceLoaderData;
 
-        {
-            scoped_lock l(g_lock);
-            state.vki = g_instanceDispatch[dispatchKey(physicalDevice)];
-        }
         fillDeviceDispatch(*pDevice, nextGdpa, &state.vkd);
 
         uint32_t qIdx = 0;
@@ -221,27 +232,22 @@ namespace vksumi
         DeviceState* st = findDeviceByQueue(queue);
         if (!st) return VK_ERROR_DEVICE_LOST;
 
-        std::vector<VkSemaphore>                  ourWaits;
-        std::vector<std::shared_ptr<SwapchainState>> hijacked(pPresentInfo->swapchainCount);
-        ourWaits.reserve(pPresentInfo->swapchainCount);
+        thread_local std::vector<VkSemaphore> ourWaits;
+        ourWaits.clear();
 
-        bool anyHijacked = false;
         for (uint32_t i = 0; i < pPresentInfo->swapchainCount; ++i)
         {
-            hijacked[i] = findSwapchain(pPresentInfo->pSwapchains[i]);
-            if (!hijacked[i]) continue;
-            anyHijacked = true;
+            auto hijacked = findSwapchain(pPresentInfo->pSwapchains[i]);
+            if (!hijacked) continue;
 
-            const VkSemaphore* ws = (ourWaits.empty()) ? pPresentInfo->pWaitSemaphores : nullptr;
-            uint32_t           wc = (ourWaits.empty()) ? pPresentInfo->waitSemaphoreCount : 0;
+            const VkSemaphore* ws = ourWaits.empty() ? pPresentInfo->pWaitSemaphores : nullptr;
+            uint32_t           wc = ourWaits.empty() ? pPresentInfo->waitSemaphoreCount : 0;
 
-            VkSemaphore sem = hijacked[i]->submitBlit(st->graphicsQueue,
-                                                     pPresentInfo->pImageIndices[i],
-                                                     ws, wc);
+            VkSemaphore sem = hijacked->submitBlit(st->graphicsQueue, pPresentInfo->pImageIndices[i], ws, wc);
             if (sem != VK_NULL_HANDLE) ourWaits.push_back(sem);
         }
 
-        if (!anyHijacked)
+        if (ourWaits.empty())
             return st->vkd.QueuePresentKHR(queue, pPresentInfo);
 
         VkPresentInfoKHR mi   = *pPresentInfo;
@@ -286,12 +292,9 @@ namespace vksumi
         { if (pCount) *pCount = 0; return VK_SUCCESS; }
         if (physicalDevice == VK_NULL_HANDLE) return VK_SUCCESS;
 
-        InstanceDispatch table;
-        {
-            scoped_lock l(g_lock);
-            table = g_instanceDispatch[dispatchKey(physicalDevice)];
-        }
-        return table.EnumerateDeviceExtensionProperties(physicalDevice, pLayerName, pCount, pProperties);
+        const auto table = instanceDispatch(dispatchKey(physicalDevice));
+        if (!table) return VK_ERROR_INITIALIZATION_FAILED;
+        return table->EnumerateDeviceExtensionProperties(physicalDevice, pLayerName, pCount, pProperties);
     }
 }
 
@@ -325,11 +328,9 @@ extern "C"
     VKSUMI_EXPORT PFN_vkVoidFunction VKAPI_CALL vksumi_GetInstanceProcAddr(VkInstance instance, const char* pName)
     {
         INTERCEPT_ALL
-        vksumi::scoped_lock l(vksumi::g_lock);
-        auto it = vksumi::g_instanceDispatch.find(vksumi::dispatchKey(instance));
-        if (it == vksumi::g_instanceDispatch.end() || !it->second.GetInstanceProcAddr)
-            return nullptr;
-        return it->second.GetInstanceProcAddr(instance, pName);
+        const auto table = vksumi::instanceDispatch(vksumi::dispatchKey(instance));
+        if (!table || !table->GetInstanceProcAddr) return nullptr;
+        return table->GetInstanceProcAddr(instance, pName);
     }
 
     VKSUMI_EXPORT PFN_vkVoidFunction VKAPI_CALL vksumi_GetDeviceProcAddr(VkDevice device, const char* pName)

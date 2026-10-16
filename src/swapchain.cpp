@@ -35,6 +35,19 @@ namespace vksumi
             return UINT32_MAX;
         }
 
+        bool isSrgbFormat(VkFormat format)
+        {
+            switch (format)
+            {
+                case VK_FORMAT_R8G8B8A8_SRGB:
+                case VK_FORMAT_B8G8R8A8_SRGB:
+                case VK_FORMAT_A8B8G8R8_SRGB_PACK32:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
         VkPhysicalDeviceMemoryProperties memoryProperties(const DeviceState& dev)
         {
             VkPhysicalDeviceMemoryProperties mp{};
@@ -609,7 +622,8 @@ namespace vksumi
         vkd.CmdSetViewport(cb, 0, 1, &vp);
         vkd.CmdSetScissor(cb, 0, 1, &sc);
 
-        const GradeParams params = buildGradeParams(*currentConfig());
+        GradeParams params = buildGradeParams(*currentConfig());
+        params.srgb_output = isSrgbFormat(m_format) ? 1.0f : 0.0f;
         std::memcpy(m_paramMapped[i], &params, sizeof(params));
 
         vkd.CmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline);

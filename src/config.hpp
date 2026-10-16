@@ -89,6 +89,7 @@ namespace vksumi
         Knobs     knobs;
         CvdGPU    cvd;
         CensorGPU region[kMaxCensor];
+        float     srgb_output = 0.0f;
     };
 
     struct Config

@@ -44,6 +44,8 @@ layout(set = 0, binding = 1) uniform Params {
     float cvd_strength;
 
     Censor region[MAX_CENSOR];
+
+    float srgb_output;
 } K;
 
 vec3 rgb2hsv(vec3 c)
@@ -128,6 +130,30 @@ vec3 censorColor(vec2 uv, float mode, float strength)
     return texture(uSrc, (floor(uv * res / g) + 0.5) * g / res).rgb;
 }
 
+vec3 linearToSrgb(vec3 c)
+{
+    c = max(c, vec3(0.0));
+    return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c));
+}
+
+vec3 srgbToLinear(vec3 c)
+{
+    c = max(c, vec3(0.0));
+    return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(0.04045, c));
+}
+
+float gradientNoise(vec2 p)
+{
+    return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715))));
+}
+
+// triangular noise of one 8bit step hides the banding of the display quantizing after us
+vec3 dither(vec3 c)
+{
+    float n = gradientNoise(gl_FragCoord.xy) + gradientNoise(gl_FragCoord.xy + vec2(47.0, 17.0)) - 1.0;
+    return c + n / 255.0;
+}
+
 vec3 grade(vec3 c, vec2 uv)
 {
     c *= exp2(K.exposure);
@@ -195,6 +221,8 @@ void main()
         float m = censorMask(vUV, rect, prm.y, prm.z);
         if (m > 0.0) c = mix(c, grade(censorColor(vUV, prm.w, prm.x), vUV), m);
     }
+
+    c = K.srgb_output > 0.5 ? srgbToLinear(dither(linearToSrgb(c))) : dither(c);
 
     oColor = vec4(c, 1.0);
 }

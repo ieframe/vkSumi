@@ -107,6 +107,16 @@ daltonize          = off    # off | protan | deutan | tritan
 daltonize_severity = 1.0    # [0 .. 1]
 daltonize_strength = 1.0    # [0 .. 1]
 
+# privacy censor for UIDs and names, censor0 to censor7
+censor0.x        = 0.88        # top-left corner, 0..1 of the screen
+censor0.y        = 0.975
+censor0.w        = 0.12        # size, 0..1 of the screen
+censor0.h        = 0.025
+censor0.shape    = rect        # rect | ellipse
+censor0.mode     = pixelate    # pixelate | blur | fill
+censor0.strength = 22          # block size or blur radius in pixels
+censor0.feather  = 0.2         # soft edge around the box, 0..1
+
 PER_GAME_CONFIG_CREATION=true     # per-game .conf file creation (true by default)
 VKSUMI_CONFIG_FILE=path/to/.conf  # path to another .conf file that act as a global substitute
 ```

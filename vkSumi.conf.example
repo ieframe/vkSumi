@@ -12,6 +12,7 @@
 # - = less / darker.
 
 enabled     = true
+compare     = false         # original on the left and graded on the right
 toggle_keys = Shift_R+F9    # in-game hotkey, X11 + XWayland (Wine/Proton)
 
 # tone

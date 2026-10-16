@@ -1,11 +1,8 @@
 # vkSumi
 
-A Vulkan layer for runtime color grading on Linux. Brightness, contrast, saturation, hue,
-gamma, temperature, tint, RGB gain, 3-band lift/gain. Live `.conf` file with hot reload.
-Per-game configs. The Adrenalin / NVIDIA Freestyle equivalent the platform's been missing.
+A Vulkan layer for runtime color grading on Linux. Brightness, contrast, saturation, hue, gamma, temperature, tint, RGB gain, 3-band lift/gain. Live `.conf` file with hot reload. Per-game configs. An Adrenalin / NVIDIA Freestyle equivalent.
 
-Made because vkBasalt is unmaintained and the only other option is `ReShade -> wine ->
-inject -> pray (waste of time for some minor tweaks, ain't installing all that.)`.
+Made because vkBasalt is unmaintained and the only other option is ReShade -> wine -> inject -> pray (waste of time for some minor tweaks, ain't installing all that.) and whatever mentally ill LUTs were needed for vkBasalt.
 
 > Little note that this does NOT replace VkBasalt's other functionalities (such as CAS, Denoise, etc.), this is purely for color grading sliders.
 
@@ -46,8 +43,7 @@ ninja -C builddir
 meson install -C builddir
 ```
 
-Drops the `.so` in `~/.local/lib/`, the layer manifest in
-`~/.local/share/vulkan/implicit_layer.d/`, and the toggle script in `~/.local/bin/`.
+Drops the `.so` in `~/.local/lib/`, the layer manifest in `~/.local/share/vulkan/implicit_layer.d/`, and the toggle script in `~/.local/bin/`.
 
 
 ## Use
@@ -64,18 +60,15 @@ Steam (any game) - right-click -> Properties -> Launch Options:
 ENABLE_VKSUMI=1 %command%
 ```
 
-Works for Proton/DXVK too since DXVK speaks Vulkan underneath.
-
-Kill switch if a game breaks: `DISABLE_VKSUMI=1 ...` (always wins over enable).
-
 ## Config
 
-Lives at `~/.config/vkSumi/vkSumi.conf` (global) and
-`~/.config/vkSumi/games/<exe-name>.conf` (per-game, auto-created on first launch).
-Per-game files merge on top of global, only set what you want different.
+Lives at `~/.config/vkSumi/vkSumi.conf` (global) and `~/.config/vkSumi/games/<exe-name>.conf` (per-game, auto-created on first launch).
+
+> Per-game files merge on top of global only set what you want different.
 
 ```ini
 enabled     = true
+compare     = false    # original on the left and graded on the right
 toggle_keys = Shift_R+F9
 
 brightness  = 0.0    # [-1 .. 1]
@@ -120,14 +113,21 @@ VKSUMI_CONFIG_FILE=path/to/.conf  # path to another .conf file that act as a glo
 
 See `vkSumi.conf.example` for the full annotated version.
 
+Envs: 
+
+| Env | What it does?! |
+|:---|:---|
+| `ENABLE_VKSUMI=1` | turns the layer on |
+| `DISABLE_VKSUMI=1` | forces it off, wins over `ENABLE_VKSUMI` |
+| `VKSUMI_CONFIG_FILE=path/to/.conf` | extra conf merged on top of everything else (per-game and global) |
+| `VKSUMI_DEBUG=1` | logs every layer call to stderr |
+
 ## Hotkey
 
 Two ways:
 
 **In-layer** (X11 + XWayland, so Wine/Proton games work):
-Set `toggle_keys = Shift_R+F9` in the conf. Press the combo while the game window is
-focused. Format is "+"-separated X11 keysym names (full list in
-`/usr/include/X11/keysymdef.h`).
+Set `toggle_keys = Shift_R+F9` in the conf. Press the combo while the game window is focused. Format is "+"-separated X11 keysym names (full list in `/usr/include/X11/keysymdef.h`).
 
 **Script + compositor bind**:
 ```
@@ -137,27 +137,18 @@ bind = SHIFT, F9, exec, vksumi-toggle
 # sway (~/.config/sway/config)
 bindsym Shift+F9 exec vksumi-toggle
 ```
-The script flips `enabled` in the conf, inotify catches it, instant reload.
-
-## Known limits
-
-- **HDR**: detected and passed through unchanged. Doing color grading correctly on
-  PQ / scRGB needs a different shader path, not done yet.
-- **Native Wayland Vulkan games**: in-layer hotkey doesn't work (Wayland blocks key
-  grabs from clients). Use the toggle script instead.
 
 ## Debugging
 
 ```fish
 ENABLE_VKSUMI=1 VKSUMI_DEBUG=1 some-game
 ```
-Dumps every layer call to stderr. Useful when something looks weird.
+Dumps every layer call to stderr (pray)
 
 ## Credits
 
 Architecture lifted from [vkBasalt](https://github.com/DadSchoorse/vkBasalt) (RIP).
-[MangoHud](https://github.com/flightlessmango/MangoHud)'s code helped figure out a few
-tricky bits.
+[MangoHud](https://github.com/flightlessmango/MangoHud)'s code helped figure out a few stuff.
 
 ## License
 

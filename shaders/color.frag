@@ -46,6 +46,7 @@ layout(set = 0, binding = 1) uniform Params {
     Censor region[MAX_CENSOR];
 
     float srgb_output;
+    float compare;
 } K;
 
 vec3 rgb2hsv(vec3 c)
@@ -209,9 +210,15 @@ vec3 grade(vec3 c, vec2 uv)
     return c;
 }
 
+vec3 look(vec3 c, vec2 uv, bool original)
+{
+    return original ? c : grade(c, uv);
+}
+
 void main()
 {
-    vec3 c = grade(texture(uSrc, vUV).rgb, vUV);
+    bool original = K.compare > 0.5 && vUV.x < 0.5;
+    vec3 c = look(texture(uSrc, vUV).rgb, vUV, original);
 
     for (int i = 0; i < MAX_CENSOR; ++i)
     {
@@ -219,8 +226,11 @@ void main()
         if (rect.z <= 0.0) continue;
         vec4 prm = K.region[i].param;
         float m = censorMask(vUV, rect, prm.y, prm.z);
-        if (m > 0.0) c = mix(c, grade(censorColor(vUV, prm.w, prm.x), vUV), m);
+        if (m > 0.0) c = mix(c, look(censorColor(vUV, prm.w, prm.x), vUV, original), m);
     }
+
+    float split = floor(float(textureSize(uSrc, 0).x) * 0.5);
+    if (K.compare > 0.5 && floor(gl_FragCoord.x) == split) c = 1.0 - clamp(c, 0.0, 1.0);
 
     c = K.srgb_output > 0.5 ? srgbToLinear(dither(linearToSrgb(c))) : dither(c);
 

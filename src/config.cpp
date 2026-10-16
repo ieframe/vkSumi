@@ -37,6 +37,7 @@ namespace vksumi
 # - = less / darker.
 
 # enabled = true
+# compare = false
 
 # brightness  = 0.0
 # contrast    = 0.0
@@ -221,6 +222,7 @@ namespace vksumi
             if (key == "daltonize_severity") { parseFloat(val, cfg.daltonize.severity); return; }
             if (key == "daltonize_strength") { parseFloat(val, cfg.daltonize.strength); return; }
             if (key == "enabled")     { cfg.enabled = parseBool(val, true); return; }
+            if (key == "compare")     { cfg.compare = parseBool(val, false); return; }
             if (key == "toggle_keys") { cfg.toggle_keys = val; return; }
             if (key == "VKSUMI_CONFIG_FILE") { cfg.vksumi_config_file = expandPath(val); return; }
             if (key == "PER_GAME_CONFIG_CREATION") { cfg.per_game_config_creation = parseBool(val, true); return; }
@@ -469,6 +471,7 @@ namespace vksumi
         GradeParams p{};
         p.knobs = cfg.enabled ? cfg.knobs : Knobs{};
         if (cfg.enabled) p.cvd = buildCvd(cfg.daltonize);
+        p.compare = cfg.compare ? 1.0f : 0.0f;
         for (size_t i = 0; i < kMaxCensor; ++i)
         {
             const CensorRegion& r = cfg.censors[i];

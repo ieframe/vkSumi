@@ -90,6 +90,7 @@ namespace vksumi
         CvdGPU    cvd;
         CensorGPU region[kMaxCensor];
         float     srgb_output = 0.0f;
+        float     compare     = 0.0f;
     };
 
     struct Config
@@ -98,6 +99,7 @@ namespace vksumi
         Daltonization daltonize;
         std::array<CensorRegion, kMaxCensor> censors;
         bool        enabled     = true;
+        bool        compare     = false;
         std::string toggle_keys = "Shift_R+F9";
         std::vector<std::string> sources;
         std::vector<std::string> search_paths;

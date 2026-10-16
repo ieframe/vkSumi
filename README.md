@@ -96,6 +96,13 @@ shadows     = 0.0    # to increase shadows depth go negative (-)
 midtones    = 0.0
 highlights  = 0.0
 
+red_saturation     = 0.0    # [-1 .. 1], only that hue changes
+yellow_saturation  = 0.0
+green_saturation   = 0.0
+cyan_saturation    = 0.0
+blue_saturation    = 0.0
+magenta_saturation = 0.0
+
 shadow_tint        = 0.0    # [0 .. 1]
 shadow_tint_hue    = 190    # [0 .. 360]
 highlight_tint     = 0.0    # [0 .. 1]

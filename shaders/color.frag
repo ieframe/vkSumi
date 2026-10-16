@@ -33,6 +33,13 @@ layout(set = 0, binding = 1) uniform Params {
     float highlight_tint;
     float highlight_tint_hue;
 
+    float red_saturation;
+    float yellow_saturation;
+    float green_saturation;
+    float cyan_saturation;
+    float blue_saturation;
+    float magenta_saturation;
+
     mat3  cvd;
     float cvd_strength;
 
@@ -65,6 +72,18 @@ vec3 bandWeights(vec3 c)
     float shadow    = pow(1.0 - l, 2.0);
     float highlight = pow(l, 2.0);
     return vec3(shadow, 1.0 - shadow - highlight, highlight);
+}
+
+// pixels blend the two nearest hue bands
+float hueSaturation(vec3 c)
+{
+    float bands[6] = float[](K.red_saturation,  K.yellow_saturation, K.green_saturation,
+                             K.cyan_saturation, K.blue_saturation,   K.magenta_saturation);
+    if (bands == float[6](0.0, 0.0, 0.0, 0.0, 0.0, 0.0)) return 0.0;
+
+    float pos = rgb2hsv(max(c, vec3(0.0))).x * 6.0;
+    int   lo  = int(pos) % 6;
+    return mix(bands[lo], bands[(lo + 1) % 6], fract(pos));
 }
 
 vec3 hueChroma(float hue_deg)
@@ -138,6 +157,8 @@ vec3 grade(vec3 c, vec2 uv)
     float minC = min(c.r, min(c.g, c.b));
     float sat  = maxC - minC;
     c = mix(vec3(luma(c)), c, 1.0 + K.vibrance * (1.0 - sat));
+
+    c = mix(vec3(luma(c)), c, 1.0 + hueSaturation(c));
 
     if (abs(K.hue_deg) > 0.001)
     {

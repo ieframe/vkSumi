@@ -64,6 +64,13 @@ namespace vksumi
 # highlight_tint     = 0.0
 # highlight_tint_hue = 35
 
+# red_saturation     = 0.0
+# yellow_saturation  = 0.0
+# green_saturation   = 0.0
+# cyan_saturation    = 0.0
+# blue_saturation    = 0.0
+# magenta_saturation = 0.0
+
 # daltonize          = off
 # daltonize_severity = 1.0
 # daltonize_strength = 1.0
@@ -203,6 +210,12 @@ namespace vksumi
             F(shadow_tint_hue)
             F(highlight_tint)
             F(highlight_tint_hue)
+            F(red_saturation)
+            F(yellow_saturation)
+            F(green_saturation)
+            F(cyan_saturation)
+            F(blue_saturation)
+            F(magenta_saturation)
             #undef F
             if (key == "daltonize")          { cfg.daltonize.type = daltonizeFromStr(val); return; }
             if (key == "daltonize_severity") { parseFloat(val, cfg.daltonize.severity); return; }

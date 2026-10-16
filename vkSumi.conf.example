@@ -37,6 +37,14 @@ shadows     = 0.0
 midtones    = 0.0
 highlights  = 0.0
 
+# per-hue saturation
+red_saturation     = 0.0    # [-1 .. 1], -1 = that hue goes grey
+yellow_saturation  = 0.0
+green_saturation   = 0.0
+cyan_saturation    = 0.0
+blue_saturation    = 0.0
+magenta_saturation = 0.0
+
 # split toning
 shadow_tint        = 0.0    # [0 .. 1], tints the dark parts
 shadow_tint_hue    = 190    # [0 .. 360], 190 = teal

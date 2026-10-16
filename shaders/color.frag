@@ -1,4 +1,5 @@
 #version 450
+#extension GL_GOOGLE_include_directive : require
 
 layout(location = 0) in  vec2 vUV;
 layout(location = 0) out vec4 oColor;
@@ -8,37 +9,9 @@ layout(set = 0, binding = 0) uniform sampler2D uSrc;
 struct Censor { vec4 rect; vec4 param; };
 
 layout(set = 0, binding = 1) uniform Params {
-    float brightness;
-    float contrast;
-    float exposure;
-    float saturation;
-
-    float vibrance;
-    float hue_deg;
-    float gamma;
-    float temperature;
-
-    float tint;
-    float red_gain;
-    float green_gain;
-    float blue_gain;
-
-    float shadows;
-    float midtones;
-    float highlights;
-    float vignette;
-
-    float shadow_tint;
-    float shadow_tint_hue;
-    float highlight_tint;
-    float highlight_tint_hue;
-
-    float red_saturation;
-    float yellow_saturation;
-    float green_saturation;
-    float cyan_saturation;
-    float blue_saturation;
-    float magenta_saturation;
+    #define KNOB(name, value) float name;
+    #include "knobs.def"
+    #undef KNOB
 
     mat3  cvd;
     float cvd_strength;

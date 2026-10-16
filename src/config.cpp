@@ -190,34 +190,9 @@ namespace vksumi
 
         void applyKey(Config& cfg, const std::string& key, const std::string& val)
         {
-            #define F(name) if (key == #name) { float f; if (parseFloat(val, f)) cfg.knobs.name = f; return; }
-            F(brightness)
-            F(contrast)
-            F(exposure)
-            F(saturation)
-            F(vibrance)
-            F(hue_deg)
-            F(gamma)
-            F(temperature)
-            F(tint)
-            F(red_gain)
-            F(green_gain)
-            F(blue_gain)
-            F(shadows)
-            F(midtones)
-            F(highlights)
-            F(vignette)
-            F(shadow_tint)
-            F(shadow_tint_hue)
-            F(highlight_tint)
-            F(highlight_tint_hue)
-            F(red_saturation)
-            F(yellow_saturation)
-            F(green_saturation)
-            F(cyan_saturation)
-            F(blue_saturation)
-            F(magenta_saturation)
-            #undef F
+            #define KNOB(name, value) if (key == #name) { parseFloat(val, cfg.knobs.name); return; }
+            #include "knobs.def"
+            #undef KNOB
             if (key == "daltonize")          { cfg.daltonize.type = daltonizeFromStr(val); return; }
             if (key == "daltonize_severity") { parseFloat(val, cfg.daltonize.severity); return; }
             if (key == "daltonize_strength") { parseFloat(val, cfg.daltonize.strength); return; }

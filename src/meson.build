@@ -13,7 +13,9 @@ foreach varname, src : shaders
     shader_headers += custom_target(varname + '_h',
         input   : src,
         output  : varname + '.h',
+        depend_files : 'knobs.def',
         command : [glslang, '-V', '-DMAX_CENSOR=@0@'.format(max_censor),
+                   '-I' + meson.current_source_dir(),
                    '@INPUT@', '--vn', varname, '-o', '@OUTPUT@'])
 endforeach
 

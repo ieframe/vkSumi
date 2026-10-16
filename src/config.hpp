@@ -7,43 +7,13 @@
 
 namespace vksumi
 {
-    // matches color.frag's Params block layout exactly.
+    // knobs.def is shared with color.frag
     struct alignas(16) Knobs
     {
-        float brightness  = 0.0f;
-        float contrast    = 0.0f;
-        float exposure    = 0.0f;
-        float saturation  = 0.0f;
-
-        float vibrance    = 0.0f;
-        float hue_deg     = 0.0f;
-        float gamma       = 0.0f;
-        float temperature = 0.0f;
-
-        float tint        = 0.0f;
-        float red_gain    = 0.0f;
-        float green_gain  = 0.0f;
-        float blue_gain   = 0.0f;
-
-        float shadows     = 0.0f;
-        float midtones    = 0.0f;
-        float highlights  = 0.0f;
-        float vignette    = 0.0f;
-
-        float shadow_tint        = 0.0f;
-        float shadow_tint_hue    = 190.0f;
-        float highlight_tint     = 0.0f;
-        float highlight_tint_hue = 35.0f;
-
-        float red_saturation     = 0.0f;
-        float yellow_saturation  = 0.0f;
-        float green_saturation   = 0.0f;
-        float cyan_saturation    = 0.0f;
-        float blue_saturation    = 0.0f;
-        float magenta_saturation = 0.0f;
+        #define KNOB(name, value) float name = value;
+        #include "knobs.def"
+        #undef KNOB
     };
-
-    static_assert(sizeof(Knobs) == 112, "Knobs layout drift");
 
     enum class Daltonize : int { Off, Protan, Deutan, Tritan };
 

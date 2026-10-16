@@ -1,11 +1,10 @@
 #include "keybinds.hpp"
 #include "logger.hpp"
+#include "text.hpp"
 
 #include <X11/Xlib.h>
 #include <X11/keysym.h>
 
-#include <cctype>
-#include <cstring>
 #include <mutex>
 #include <vector>
 
@@ -39,17 +38,16 @@ namespace vksumi
             g_codes.clear();
             std::string token;
             auto flush = [&] {
-                while (!token.empty() && std::isspace(static_cast<unsigned char>(token.front()))) token.erase(0, 1);
-                while (!token.empty() && std::isspace(static_cast<unsigned char>(token.back())))  token.pop_back();
-                if (token.empty()) return;
-                KeySym ks = XStringToKeysym(token.c_str());
-                if (ks == NoSymbol) { VKSUMI_LOG("hotkey: unknown key '%s'", token.c_str()); }
+                const std::string name = trim(token);
+                token.clear();
+                if (name.empty()) return;
+                KeySym ks = XStringToKeysym(name.c_str());
+                if (ks == NoSymbol) { VKSUMI_LOG("hotkey: unknown key '%s'", name.c_str()); }
                 else
                 {
                     KeyCode kc = XKeysymToKeycode(d, ks);
                     if (kc) g_codes.push_back(kc);
                 }
-                token.clear();
             };
             for (char c : combo)
             {

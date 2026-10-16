@@ -19,9 +19,6 @@ namespace vksumi
         std::unordered_map<void*,        DeviceState>                                g_devices;
         std::unordered_map<VkSwapchainKHR, std::shared_ptr<SwapchainState>>          g_swapchains;
 
-        template<typename T>
-        void* keyOf(T h) { return *reinterpret_cast<void**>(h); }
-
         uint32_t findMemoryType(const VkPhysicalDeviceMemoryProperties& mp,
                                 uint32_t                                typeBits,
                                 VkMemoryPropertyFlags                   required)
@@ -84,24 +81,24 @@ namespace vksumi
     void registerDevice(VkDevice d, DeviceState s)
     {
         std::lock_guard<std::mutex> l(g_lock);
-        g_devices[keyOf(d)] = s;
+        g_devices[dispatchKey(d)] = s;
     }
     DeviceState* findDevice(VkDevice d)
     {
         std::lock_guard<std::mutex> l(g_lock);
-        auto it = g_devices.find(keyOf(d));
+        auto it = g_devices.find(dispatchKey(d));
         return it == g_devices.end() ? nullptr : &it->second;
     }
     DeviceState* findDeviceByQueue(VkQueue q)
     {
         std::lock_guard<std::mutex> l(g_lock);
-        auto it = g_devices.find(keyOf(q));
+        auto it = g_devices.find(dispatchKey(q));
         return it == g_devices.end() ? nullptr : &it->second;
     }
     void unregisterDevice(VkDevice d)
     {
         std::lock_guard<std::mutex> l(g_lock);
-        g_devices.erase(keyOf(d));
+        g_devices.erase(dispatchKey(d));
     }
 
     void registerSwapchain(VkSwapchainKHR sc, std::shared_ptr<SwapchainState> st)
@@ -656,13 +653,13 @@ namespace vksumi
 
         recordCommandBuffer(imageIndex);
 
-        std::vector<VkPipelineStageFlags> waitStages(waitCount, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+        m_waitStages.assign(waitCount, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 
         VkSubmitInfo si{};
         si.sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO;
         si.waitSemaphoreCount   = waitCount;
         si.pWaitSemaphores      = waitCount ? waitSemaphores : nullptr;
-        si.pWaitDstStageMask    = waitCount ? waitStages.data() : nullptr;
+        si.pWaitDstStageMask    = waitCount ? m_waitStages.data() : nullptr;
         si.commandBufferCount   = 1;
         si.pCommandBuffers      = &m_cmdBuffers[imageIndex];
         si.signalSemaphoreCount = 1;

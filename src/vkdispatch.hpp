@@ -18,6 +18,12 @@ namespace vksumi
         VK_DEVICE_FUNCS
     };
 
+    template<typename T>
+    inline void* dispatchKey(T handle)
+    {
+        return *reinterpret_cast<void**>(handle);
+    }
+
     void fillInstanceDispatch(VkInstance instance, PFN_vkGetInstanceProcAddr gipa, InstanceDispatch* table);
     void fillDeviceDispatch(VkDevice device, PFN_vkGetDeviceProcAddr gdpa, DeviceDispatch* table);
 }

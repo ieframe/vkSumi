@@ -18,15 +18,8 @@ namespace vksumi
 {
     static std::mutex                                  g_lock;
     static std::unordered_map<void*, InstanceDispatch> g_instanceDispatch;
-    static std::unordered_map<void*, VkInstance>       g_instanceMap;
 
     using scoped_lock = std::lock_guard<std::mutex>;
-
-    template<typename T>
-    static void* GetKey(T handle)
-    {
-        return *reinterpret_cast<void**>(handle);
-    }
 
     static VkLayerInstanceCreateInfo* findInstanceChainInfo(const VkInstanceCreateInfo* info)
     {
@@ -67,8 +60,7 @@ namespace vksumi
 
         {
             scoped_lock l(g_lock);
-            g_instanceDispatch[GetKey(*pInstance)] = table;
-            g_instanceMap     [GetKey(*pInstance)] = *pInstance;
+            g_instanceDispatch[dispatchKey(*pInstance)] = table;
         }
 
         (void)currentConfig();
@@ -85,9 +77,8 @@ namespace vksumi
         InstanceDispatch table;
         {
             scoped_lock l(g_lock);
-            table = g_instanceDispatch[GetKey(instance)];
-            g_instanceDispatch.erase(GetKey(instance));
-            g_instanceMap.erase(GetKey(instance));
+            table = g_instanceDispatch[dispatchKey(instance)];
+            g_instanceDispatch.erase(dispatchKey(instance));
         }
         table.DestroyInstance(instance, pAllocator);
     }
@@ -145,7 +136,7 @@ namespace vksumi
 
         {
             scoped_lock l(g_lock);
-            state.vki = g_instanceDispatch[GetKey(physicalDevice)];
+            state.vki = g_instanceDispatch[dispatchKey(physicalDevice)];
         }
         fillDeviceDispatch(*pDevice, nextGdpa, &state.vkd);
 
@@ -298,7 +289,7 @@ namespace vksumi
         InstanceDispatch table;
         {
             scoped_lock l(g_lock);
-            table = g_instanceDispatch[GetKey(physicalDevice)];
+            table = g_instanceDispatch[dispatchKey(physicalDevice)];
         }
         return table.EnumerateDeviceExtensionProperties(physicalDevice, pLayerName, pCount, pProperties);
     }
@@ -335,7 +326,7 @@ extern "C"
     {
         INTERCEPT_ALL
         vksumi::scoped_lock l(vksumi::g_lock);
-        auto it = vksumi::g_instanceDispatch.find(vksumi::GetKey(instance));
+        auto it = vksumi::g_instanceDispatch.find(vksumi::dispatchKey(instance));
         if (it == vksumi::g_instanceDispatch.end() || !it->second.GetInstanceProcAddr)
             return nullptr;
         return it->second.GetInstanceProcAddr(instance, pName);

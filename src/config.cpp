@@ -1,23 +1,24 @@
 #include "config.hpp"
 #include "cvd.hpp"
 #include "logger.hpp"
+#include "text.hpp"
 
 #include <algorithm>
 #include <atomic>
 #include <charconv>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <mutex>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <thread>
 #include <unordered_map>
 #include <vector>
 #include <unistd.h>
 #include <sys/inotify.h>
-#include <sys/stat.h>
-#include <sys/types.h>
 #include <poll.h>
 
 namespace vksumi
@@ -87,14 +88,6 @@ namespace vksumi
 )VKSUMI";
 
         constexpr std::string_view kCensorPrefix = "censor";
-
-        std::string trim(const std::string& s)
-        {
-            size_t a = s.find_first_not_of(" \t\r\n");
-            if (a == std::string::npos) return {};
-            size_t b = s.find_last_not_of(" \t\r\n");
-            return s.substr(a, b - a + 1);
-        }
 
         bool parseBool(const std::string& v, bool fallback)
         {
@@ -234,17 +227,12 @@ namespace vksumi
             return cut == std::string::npos ? path : path.substr(cut + 1);
         }
 
-        std::string dirname(const std::string& path)
-        {
-            size_t cut = path.find_last_of('/');
-            return cut == std::string::npos ? "." : path.substr(0, cut);
-        }
-
         std::string absolutePath(const std::string& path)
         {
-            if (path.empty() || path[0] == '/') return path;
-            char cwd[4096];
-            return getcwd(cwd, sizeof(cwd)) ? std::string(cwd) + "/" + path : path;
+            if (path.empty()) return path;
+            std::error_code ec;
+            const auto abs = std::filesystem::absolute(path, ec);
+            return ec ? path : abs.string();
         }
 
         bool endsWithIcase(const std::string& s, const std::string& suffix)
@@ -284,31 +272,21 @@ namespace vksumi
                 if (!lastExe.empty()) return lastExe;
             }
 
-            char buf[4096];
-            ssize_t n = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
-            if (n <= 0) return {};
-            buf[n] = '\0';
-            return basename(buf);
+            std::error_code ec;
+            const auto exe = std::filesystem::read_symlink("/proc/self/exe", ec);
+            return ec ? std::string{} : basename(exe.string());
         }
 
         bool fileExists(const std::string& p)
         {
-            struct stat st{};
-            return ::stat(p.c_str(), &st) == 0 && S_ISREG(st.st_mode);
+            std::error_code ec;
+            return std::filesystem::is_regular_file(p, ec);
         }
 
         void mkdir_p(const std::string& path)
         {
-            std::string cur;
-            for (size_t i = 0; i <= path.size(); ++i)
-            {
-                if (i == path.size() || path[i] == '/')
-                {
-                    if (!cur.empty()) ::mkdir(cur.c_str(), 0755);
-                    if (i < path.size()) cur.push_back('/');
-                }
-                else cur.push_back(path[i]);
-            }
+            std::error_code ec;
+            std::filesystem::create_directories(path, ec);
         }
 
         std::string configHomeDir()
@@ -473,7 +451,7 @@ namespace vksumi
         {
             for (const auto& path : cfg.search_paths)
             {
-                const std::string dir = dirname(path);
+                const std::string dir = std::filesystem::path(path).parent_path().string();
                 int wd = inotify_add_watch(ifd, dir.c_str(), mask);
                 if (wd < 0) { VKSUMI_TRACE("inotify_add_watch(%s) failed: %s", dir.c_str(), std::strerror(errno)); continue; }
                 if (watchedDirs.emplace(wd, dir).second) VKSUMI_LOG("watching %s for conf changes", dir.c_str());

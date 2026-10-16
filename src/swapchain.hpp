@@ -94,6 +94,7 @@ namespace vksumi
         std::vector<VkCommandBuffer> m_cmdBuffers;
         std::vector<VkSemaphore>     m_renderDone;
         std::vector<VkFence>         m_inFlight;
+        std::vector<VkPipelineStageFlags> m_waitStages;
 
         std::vector<bool>            m_realFirstUse;
         uint32_t                     m_presentCount = 0;

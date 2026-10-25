@@ -4,7 +4,7 @@ A Vulkan layer for runtime color grading on Linux. Brightness, contrast, saturat
 
 Made because vkBasalt is unmaintained and the only other option is ReShade -> wine -> inject -> pray (waste of time for some minor tweaks, ain't installing all that.) and whatever mentally ill LUTs were needed for vkBasalt.
 
-> Little note that this does NOT replace VkBasalt's other functionalities (such as CAS, Denoise, etc.), this is purely for color grading sliders.
+> Little note that this does NOT replace VkBasalt's other functionalities (such as Denoise, etc.), this is purely for color grading sliders.
 
 ## Screenshots
 
@@ -102,6 +102,8 @@ highlight_tint     = 0.0    # [0 .. 1]
 highlight_tint_hue = 35     # [0 .. 360]
 
 vignette    = 0.0    # [0 .. 1], darkens toward the corners
+
+sharpness   = 0.0    # [0 .. 1], AMD CAS, sharpens soft detail more than hard edges
 
 daltonize          = off    # off | protan | deutan | tritan
 daltonize_severity = 1.0    # [0 .. 1]

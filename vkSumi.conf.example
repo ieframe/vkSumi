@@ -55,6 +55,9 @@ highlight_tint_hue = 35     # [0 .. 360], 35 = warm orange
 # lens
 vignette    = 0.0    # [0 .. 1], darkens toward the corners
 
+# sharpening
+sharpness   = 0.0    # [0 .. 1], AMD CAS, sharpens soft detail more than hard edges
+
 # color vision
 daltonize          = off    # off | protan | deutan | tritan
 daltonize_severity = 1.0    # [0 .. 1], 1 = cone missing, lower = cone shifted

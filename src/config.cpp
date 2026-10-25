@@ -73,6 +73,8 @@ namespace vksumi
 # blue_saturation    = 0.0
 # magenta_saturation = 0.0
 
+# sharpness   = 0.0
+
 # daltonize          = off
 # daltonize_severity = 1.0
 # daltonize_strength = 1.0

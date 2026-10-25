@@ -76,6 +76,29 @@ vec3 daltonize(vec3 c, mat3 simulation, float strength)
     return c + shift * strength;
 }
 
+// amd cas, sharpens less where local contrast is already high
+vec3 sharpen(vec3 c, vec2 uv, float sharpness)
+{
+    vec2 px = 1.0 / vec2(textureSize(uSrc, 0));
+    vec3 nw = texture(uSrc, uv + vec2(-1, -1) * px).rgb;
+    vec3 n  = texture(uSrc, uv + vec2( 0, -1) * px).rgb;
+    vec3 ne = texture(uSrc, uv + vec2( 1, -1) * px).rgb;
+    vec3 w  = texture(uSrc, uv + vec2(-1,  0) * px).rgb;
+    vec3 e  = texture(uSrc, uv + vec2( 1,  0) * px).rgb;
+    vec3 sw = texture(uSrc, uv + vec2(-1,  1) * px).rgb;
+    vec3 s  = texture(uSrc, uv + vec2( 0,  1) * px).rgb;
+    vec3 se = texture(uSrc, uv + vec2( 1,  1) * px).rgb;
+
+    vec3 mn = min(min(min(n, w), min(c, e)), s);
+    vec3 mx = max(max(max(n, w), max(c, e)), s);
+    mn += min(mn, min(min(nw, ne), min(sw, se)));
+    mx += max(mx, max(max(nw, ne), max(sw, se)));
+
+    vec3 amp  = sqrt(clamp(min(mn, 2.0 - mx) / max(mx, vec3(1e-5)), 0.0, 1.0));
+    vec3 lobe = -amp * clamp(sharpness, 0.0, 1.0) * 0.2;
+    return clamp((c + (n + w + e + s) * lobe) / (1.0 + 4.0 * lobe), 0.0, 1.0);
+}
+
 float censorMask(vec2 uv, vec4 rect, float feather, float shape)
 {
     vec2  d = abs(uv - rect.xy);
@@ -191,7 +214,9 @@ vec3 look(vec3 c, vec2 uv, bool original)
 void main()
 {
     bool original = K.compare > 0.5 && vUV.x < 0.5;
-    vec3 c = look(texture(uSrc, vUV).rgb, vUV, original);
+    vec3 c = texture(uSrc, vUV).rgb;
+    if (K.sharpness > 0.0 && !original) c = sharpen(c, vUV, K.sharpness);
+    c = look(c, vUV, original);
 
     for (int i = 0; i < MAX_CENSOR; ++i)
     {
